@@ -4,6 +4,9 @@ The goal of this project is to provide a fast, lightweight, and user-friendly al
 
 ## Status: 🚧 Work in Progress
 
+<img width="1919" height="1153" alt="image" src="https://github.com/user-attachments/assets/de3c18f3-c17b-47af-8255-1399ce234482" />
+
+
 # Features (Planned)
 
 ## PDF Management
