@@ -59,9 +59,7 @@ class PdfEditorView(QGraphicsView):
         return False
 
     def keyPressEvent(self, event):
-        if event.matches(Qt.Key_Undo) or (
-            event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_Z
-        ):
+        if event.modifiers() == Qt.ControlModifier and event.key() == Qt.Key_Z:
             if self.main_window:
                 self.main_window.undo_last_change()
             return
