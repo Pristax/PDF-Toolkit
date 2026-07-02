@@ -65,9 +65,16 @@ class MainWindow(QMainWindow):
         self.delete_pages_action.triggered.connect(self.delete_pages)
 
         self.extract_pages_action = QAction("Extract Pages", self)
+        self.extract_pages_action.triggered.connect(self.extract_pages)
+
         self.reorder_pages_action = QAction("Reorder Pages", self)
+        self.reorder_pages_action.triggered.connect(self.reorder_pages)
+
         self.split_pages_action = QAction("Split PDF", self)
+        self.split_pages_action.triggered.connect(self.split_pdf)
+
         self.merge_pages_action = QAction("Merge PDFs", self)
+        self.merge_pages_action.triggered.connect(self.merge_pdfs)
 
         # Annotate actions
         self.add_text_action = QAction("Add Text", self)
@@ -511,6 +518,237 @@ class MainWindow(QMainWindow):
 
         except Exception as error:
             QMessageBox.critical(self, "Delete Error", f"Could not delete pages:\n{error}")
+
+    def extract_pages(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        page_range, ok = QInputDialog.getText(
+            self,
+            "Extract Pages",
+            "Pages to extract: example 1,3-5 or all"
+        )
+
+        if not ok or not page_range.strip():
+            return
+
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Extracted Pages As",
+            "",
+            "PDF Files (*.pdf)"
+        )
+
+        if not output_path:
+            return
+
+        if not output_path.lower().endswith(".pdf"):
+            output_path += ".pdf"
+
+        try:
+            pages = self.parse_page_range(page_range)
+
+            if not pages:
+                QMessageBox.warning(self, "Extract Pages", "No pages selected.")
+                return
+
+            new_document = fitz.open()
+
+            for page_index in pages:
+                new_document.insert_pdf(
+                    self.pdf_document,
+                    from_page=page_index,
+                    to_page=page_index
+                )
+
+            new_document.save(output_path)
+            new_document.close()
+
+            self.statusBar().showMessage(f"Extracted {len(pages)} page(s) to: {output_path}")
+
+        except Exception as error:
+            QMessageBox.critical(self, "Extract Error", f"Could not extract pages:\n{error}")
+
+    def reorder_pages(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        page_count = len(self.pdf_document)
+
+        order_text, ok = QInputDialog.getText(
+            self,
+            "Reorder Pages",
+            f"Enter new page order.\n\n"
+            f"Example for {page_count} pages: 3,1,2\n\n"
+            f"You must use every page exactly once."
+        )
+
+        if not ok or not order_text.strip():
+            return
+
+        try:
+            parts = order_text.split(",")
+            new_order = []
+
+            for part in parts:
+                part = part.strip()
+
+                if not part.isdigit():
+                    raise ValueError("Only page numbers separated by commas are allowed.")
+
+                page_number = int(part)
+
+                if page_number < 1 or page_number > page_count:
+                    raise ValueError(f"Page number {page_number} is out of range.")
+
+                new_order.append(page_number - 1)
+
+            if len(new_order) != page_count:
+                raise ValueError(
+                    f"You must enter exactly {page_count} page numbers."
+                )
+
+            if len(set(new_order)) != page_count:
+                raise ValueError(
+                    "Each page can be used only once. Duplicate pages are not allowed."
+                )
+
+            reply = QMessageBox.question(
+                self,
+                "Confirm Reorder",
+                "Reorder pages now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            self.pdf_document.select(new_order)
+
+            self.current_page_index = 0
+            self.render_page()
+
+            self.statusBar().showMessage("Pages reordered successfully")
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Reorder Error",
+                f"Could not reorder pages:\n{error}"
+            )
+
+    def merge_pdfs(self):
+        file_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Select PDFs to Merge - select at least 2 PDF files",
+            "",
+            "PDF Files (*.pdf)"
+        )
+
+        if not file_paths:
+            return
+
+        if len(file_paths) < 2:
+            QMessageBox.warning(
+                self,
+                "Merge PDFs",
+                "Please select at least 2 PDF files to merge.\n\n"
+                "Tip: Hold Ctrl and click multiple PDF files."
+            )
+            return
+
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Merged PDF As",
+            "",
+            "PDF Files (*.pdf)"
+        )
+
+        if not output_path:
+            return
+
+        if not output_path.lower().endswith(".pdf"):
+            output_path += ".pdf"
+
+        if output_path in file_paths:
+            QMessageBox.warning(
+                self,
+                "Merge PDFs",
+                "Do not save the merged PDF over one of the source files.\n"
+                "Choose a new file name, for example merged.pdf."
+            )
+            return
+
+        try:
+            merged_document = fitz.open()
+
+            for file_path in file_paths:
+                source_document = fitz.open(file_path)
+                merged_document.insert_pdf(source_document)
+                source_document.close()
+
+            merged_document.save(output_path)
+            merged_document.close()
+
+            self.statusBar().showMessage(
+                f"Merged {len(file_paths)} PDF file(s) to: {output_path}"
+            )
+
+            reply = QMessageBox.question(
+                self,
+                "Open Merged PDF",
+                "Merged PDF was created. Do you want to open it now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+
+            if reply == QMessageBox.Yes:
+                self.load_pdf(output_path)
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Merge Error",
+                f"Could not merge PDFs:\n{error}"
+            )
+
+    def split_pdf(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        output_folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Output Folder"
+        )
+
+        if not output_folder:
+            return
+
+        try:
+            page_count = len(self.pdf_document)
+
+            for page_index in range(page_count):
+                new_document = fitz.open()
+
+                new_document.insert_pdf(
+                    self.pdf_document,
+                    from_page=page_index,
+                    to_page=page_index
+                )
+
+                output_path = f"{output_folder}/page_{page_index + 1}.pdf"
+
+                new_document.save(output_path)
+                new_document.close()
+
+            self.statusBar().showMessage(f"Split PDF into {page_count} file(s)")
+
+        except Exception as error:
+            QMessageBox.critical(self, "Split Error", f"Could not split PDF:\n{error}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
