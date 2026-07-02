@@ -42,6 +42,37 @@ Extract text from images
 
 ## Changelog
 
+### v0.4
+
+Version 0.4 improves the PDF editing system and project structure.
+
+#### Added
+
+- Added editable text objects
+- Added movable text objects on PDF pages
+- Added double-click text editing
+- Added text deletion using the `Delete` key
+- Added `Ctrl+Z` undo support
+- Added drag & drop PDF opening directly inside the PDF viewer
+- Added separate editor view for PDF rendering and object editing
+- Added separate text item class for editable PDF text objects
+
+#### Improved
+
+- Reworked the PDF viewer from `QLabel` / `QScrollArea` to `QGraphicsView` / `QGraphicsScene`
+- Improved Add Text workflow
+- Text can now be moved directly by dragging the text object
+- Improved Save and Save As handling for inserted text
+- Improved drag & drop behavior after switching to `QGraphicsView`
+- Improved code organization by splitting the project into multiple files
+
+#### Refactor
+
+- Moved main window logic to `app/main_window.py`
+- Added `app/pdf_editor_view.py`
+- Added `app/pdf_text_item.py`
+- Simplified `main.py` to only start the application
+
 ### v0.3
 
 - Added Extract Pages
