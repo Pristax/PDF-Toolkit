@@ -13,6 +13,7 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QFileDialog,
     QMessageBox,
+    QInputDialog,
 )
 
 class MainWindow(QMainWindow):
@@ -58,7 +59,11 @@ class MainWindow(QMainWindow):
 
         # Pages actions
         self.rotate_pages_action = QAction("Rotate Pages", self)
+        self.rotate_pages_action.triggered.connect(self.rotate_pages)
+
         self.delete_pages_action = QAction("Delete Pages", self)
+        self.delete_pages_action.triggered.connect(self.delete_pages)
+
         self.extract_pages_action = QAction("Extract Pages", self)
         self.reorder_pages_action = QAction("Reorder Pages", self)
         self.split_pages_action = QAction("Split PDF", self)
@@ -208,7 +213,7 @@ class MainWindow(QMainWindow):
             "PDF Files (*.pdf)"
         )
 
-        if not file_path:
+        if file_path:
             self.load_pdf(file_path)
 
     def load_pdf(self, file_path):
@@ -364,6 +369,148 @@ class MainWindow(QMainWindow):
 
         except Exception as error:
             QMessageBox.critical(self, "Save As Error", f"Could not save PDF:\n{error}")
+
+    def parse_page_range(self, text):
+        if not self.pdf_document:
+            return []
+
+        page_count = len(self.pdf_document)
+        text = text.strip().lower()
+
+        if text == "all":
+            return list(range(page_count))
+
+        pages = set()
+
+        parts = text.split(",")
+
+        for part in parts:
+            part = part.strip()
+
+            if not part:
+                continue
+
+            if "-" in part:
+                start_text, end_text = part.split("-", 1)
+
+                if not start_text.strip().isdigit() or not end_text.strip().isdigit():
+                    raise ValueError("Invalid page range.")
+
+                start = int(start_text.strip())
+                end = int(end_text.strip())
+
+                if start > end:
+                    raise ValueError("Start page cannot be greater than end page.")
+
+                for page_number in range(start, end + 1):
+                    if page_number < 1 or page_number > page_count:
+                        raise ValueError("Page number out of range.")
+
+                    pages.add(page_number - 1)
+
+            else:
+                if not part.isdigit():
+                    raise ValueError("Invalid page number.")
+
+                page_number = int(part)
+
+                if page_number < 1 or page_number > page_count:
+                    raise ValueError("Page number out of range.")
+
+                pages.add(page_number - 1)
+
+        return sorted(pages)
+
+    def rotate_pages(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        page_range, ok = QInputDialog.getText(
+            self,
+            "Rotate Pages",
+            "Pages to rotate: example 1,3-5 or all"
+        )
+
+        if not ok or not page_range.strip():
+            return
+
+        rotation_options = ["90", "180", "270"]
+
+        rotation_text, ok = QInputDialog.getItem(
+            self,
+            "Rotation",
+            "Select rotation:",
+            rotation_options,
+            0,
+            False
+        )
+
+        if not ok:
+            return
+
+        try:
+            pages = self.parse_page_range(page_range)
+            rotation = int(rotation_text)
+
+            for page_index in pages:
+                page = self.pdf_document[page_index]
+                new_rotation = (page.rotation + rotation) % 360
+                page.set_rotation(new_rotation)
+
+            self.render_page()
+            self.statusBar().showMessage(f"Rotated {len(pages)} page(s) by {rotation} degrees")
+
+        except Exception as error:
+            QMessageBox.critical(self, "Rotate Error", f"Could not rotate pages:\n{error}")
+
+    def delete_pages(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        if len(self.pdf_document) <= 1:
+            QMessageBox.warning(self, "Delete Pages", "Cannot delete pages from a PDF with only one page.")
+            return
+
+        page_range, ok = QInputDialog.getText(
+            self,
+            "Delete Pages",
+            "Pages to delete: example 1,3-5"
+        )
+
+        if not ok or not page_range.strip():
+            return
+
+        try:
+            pages = self.parse_page_range(page_range)
+
+            if len(pages) >= len(self.pdf_document):
+                QMessageBox.warning(self, "Delete Pages", "Cannot delete all pages.")
+                return
+
+            reply = QMessageBox.question(
+                self,
+                "Confirm Delete",
+                f"Delete {len(pages)} page(s)?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+
+            if reply != QMessageBox.Yes:
+                return
+
+            for page_index in sorted(pages, reverse=True):
+                self.pdf_document.delete_page(page_index)
+
+            if self.current_page_index >= len(self.pdf_document):
+                self.current_page_index = len(self.pdf_document) - 1
+
+            self.render_page()
+            self.statusBar().showMessage(f"Deleted {len(pages)} page(s)")
+
+        except Exception as error:
+            QMessageBox.critical(self, "Delete Error", f"Could not delete pages:\n{error}")
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
