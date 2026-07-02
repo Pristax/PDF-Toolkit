@@ -114,6 +114,10 @@ class MainWindow(QMainWindow):
         self.next_page_action.setShortcut("Right")
         self.next_page_action.triggered.connect(self.next_page)
 
+        # Help actions
+        self.about_action = QAction("About", self)
+        self.about_action.triggered.connect(self.show_about_dialog)
+
     def create_menu_bar(self):
         menubar = self.menuBar()
 
@@ -163,6 +167,9 @@ class MainWindow(QMainWindow):
         view_menu.addSeparator()
         view_menu.addAction(self.previous_page_action)
         view_menu.addAction(self.next_page_action)
+
+        help_menu = menubar.addMenu("Help")
+        help_menu.addAction(self.about_action)
 
     def create_toolbar(self):
         toolbar = QToolBar("Main Toolbar")
@@ -749,6 +756,19 @@ class MainWindow(QMainWindow):
 
         except Exception as error:
             QMessageBox.critical(self, "Split Error", f"Could not split PDF:\n{error}")
+
+
+    def show_about_dialog(self):
+        QMessageBox.about(
+            self,
+            "About PDF Toolkit",
+            """
+            <h2>PDF Toolkit</h2>
+            <p><b>Version: </b>v0.3</p>
+            <p><b>Created by :</b> Jan Pristaš</p>
+            <p>Desktop PDF editor and toolkit built with Python, PySide6 and PyMuPDF.</p>
+            """
+        )
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
