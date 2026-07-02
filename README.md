@@ -2,7 +2,7 @@
 A modern, open-source PDF toolkit built with Python and PySide6.
 The goal of this project is to provide a fast, lightweight, and user-friendly alternative to bulky PDF software.
 
-##Status: 🚧 Work in Progress
+## Status: 🚧 Work in Progress
 
 # Features (Planned)
 
