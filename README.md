@@ -40,6 +40,29 @@ Extract text from images
 - Remove passwords (with permission)
 - Remove metadata
 
+# Changelog
+
+### v0.2
+- Added PDF opening
+- Added drag & drop PDF opening
+- Added PDF page rendering
+- Added page navigation
+- Added zoom in / zoom out
+- Added Save and Save As
+- Added Merge PDFs
+- Added Split PDF
+- Added Rotate Pages
+- Added Delete Pages
+- Added Extract Pages
+- Added Reorder Pages
+- Improved menu and toolbar layout
+
+### v0.1
+- Initial project setup
+- Basic PySide6 window
+- Basic menu bar
+- Basic toolbar
+
 # Technologies
 - Python 3.11+
 - PySide6
