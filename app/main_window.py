@@ -20,7 +20,7 @@ from app.pdf_text_item import PdfTextItem
 
 
 APP_NAME = "PDF Toolkit"
-APP_VERSION = "v0.3"
+APP_VERSION = "v0.4"
 APP_AUTHOR = "Jan Pristaš"
 
 
