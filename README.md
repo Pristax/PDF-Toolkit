@@ -45,23 +45,22 @@ Extract text from images
 - Pillow
 
 # Installation
-Download the "PDF-Toolkit"
-Create a virtual environment:
-```bash
+1. Download the project
+Download or clone the repository:
+
+git clone https://github.com/Pristax/PDF-Toolkit.git
+cd PDF-Toolkit
+
+Or download the project as a ZIP file from GitHub and extract it.
+
+2. Create a virtual environment
 python -m venv .venv
-
-Activate it.
-Windows:
-```bash
+3. Activate the virtual environment
+Windows
 .venv\Scripts\activate
-
-Linux/macOS:
+Linux / macOS
 source .venv/bin/activate
-
-Install dependencies:
-```bash
+4. Install dependencies
 pip install -r requirements.txt
-
-Run the application:
-```bash
+5. Run the application
 python main.py
