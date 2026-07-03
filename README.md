@@ -42,6 +42,41 @@ Extract text from images
 
 ## Changelog
 
+### v0.5
+
+Version 0.5 adds image editing support and improves text customization.
+
+#### Added
+
+- Added **Add Image** tool
+- Support for adding `.png`, `.jpg` and `.jpeg` images to PDF pages
+- Added movable image objects
+- Added image resizing directly on the PDF page
+- Added resize support from all image corners
+- Added invisible resize zones instead of visible resize handles
+- Added `Ctrl + mouse wheel` image resizing
+- Added image deletion using the `Delete` key
+- Added `Ctrl+Z` undo support for image actions
+- Added text color selection for **Add Text**
+- Text color is preserved when changing pages or zoom level
+- Text color is saved into the final PDF
+
+#### Improved
+
+- Improved image resize behavior
+- Removed the visible black resize square from image objects
+- Improved image object selection and movement
+- Improved Add Text workflow with color selection
+- Improved undo handling for edit objects
+- Improved saving of inserted text and images into PDF files
+
+#### Refactor
+
+- Added separate image object class:
+  - `app/pdf_image_item.py`
+- Extended editor object handling for both text and images
+- Extended save/restore logic for editable page objects
+
 ### v0.4
 
 Version 0.4 improves the PDF editing system and project structure.
