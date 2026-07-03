@@ -1,10 +1,10 @@
 from PySide6.QtCore import Qt
-from PySide6.QtGui import QFont
+from PySide6.QtGui import QFont, QColor
 from PySide6.QtWidgets import QGraphicsTextItem
 
 
 class PdfTextItem(QGraphicsTextItem):
-    def __init__(self, text, font_size=14, zoom=1.0, main_window=None):
+    def __init__(self, text, font_size=14, zoom=1.0, main_window=None, color=None):
         super().__init__(text)
 
         self.pdf_font_size = font_size
@@ -12,11 +12,16 @@ class PdfTextItem(QGraphicsTextItem):
         self.main_window = main_window
         self.undo_saved_for_current_action = False
 
+        if color is None:
+            color = QColor(0, 0, 0)
+
+        self.text_color = color
+
         font = QFont()
         font.setPointSize(max(1, int(font_size * zoom)))
         self.setFont(font)
 
-        self.setDefaultTextColor(Qt.black)
+        self.setDefaultTextColor(self.text_color)
 
         self.setFlags(
             QGraphicsTextItem.ItemIsMovable
@@ -25,7 +30,6 @@ class PdfTextItem(QGraphicsTextItem):
         )
 
         self.setTextInteractionFlags(Qt.NoTextInteraction)
-
         self.setZValue(10)
 
     def mousePressEvent(self, event):

@@ -3,7 +3,7 @@ import os
 import tempfile
 import fitz
 
-from PySide6.QtGui import QIcon, QAction, QImage, QPixmap
+from PySide6.QtGui import QIcon, QAction, QImage, QPixmap, QColor
 from PySide6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -13,10 +13,12 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QInputDialog,
     QGraphicsPixmapItem,
+    QColorDialog,
 )
 
 from app.pdf_editor_view import PdfEditorView
 from app.pdf_text_item import PdfTextItem
+from app.pdf_image_item import PdfImageItem
 
 
 APP_NAME = "PDF Toolkit"
@@ -41,6 +43,8 @@ class MainWindow(QMainWindow):
         # Temporary editable text objects.
         # They are stored here until Save / Save As writes them into the PDF.
         self.page_text_items = {}
+        self.page_image_items = {}
+
         self.undo_stack = []
         self.max_undo_steps = 20
         self.is_restoring_undo = False
@@ -96,6 +100,8 @@ class MainWindow(QMainWindow):
         self.add_text_action.triggered.connect(self.add_text_item)
 
         self.add_image_action = QAction("Add Image", self)
+        self.add_image_action.triggered.connect(self.add_image_item)
+
         self.pen_action = QAction("Pen", self)
         self.highlight_action = QAction("Highlight", self)
         self.signature_action = QAction("Signature", self)
@@ -253,6 +259,7 @@ class MainWindow(QMainWindow):
                 "current_page_index": self.current_page_index,
                 "zoom": self.zoom,
                 "page_text_items": copy.deepcopy(self.page_text_items),
+                "page_image_items": copy.deepcopy(self.page_image_items),
             }
 
             self.undo_stack.append(state)
@@ -292,6 +299,7 @@ class MainWindow(QMainWindow):
             self.current_page_index = state["current_page_index"]
             self.zoom = state["zoom"]
             self.page_text_items = copy.deepcopy(state["page_text_items"])
+            self.page_image_items = copy.deepcopy(state.get("page_image_items", {}))
 
             if self.current_page_index >= len(self.pdf_document):
                 self.current_page_index = max(0, len(self.pdf_document) - 1)
@@ -334,6 +342,7 @@ class MainWindow(QMainWindow):
             self.current_file_path = file_path
             self.current_page_index = 0
             self.page_text_items = {}
+            self.page_image_items = {}
 
             self.render_page()
             self.statusBar().showMessage(f"Opened: {file_path}")
@@ -350,6 +359,7 @@ class MainWindow(QMainWindow):
         self.current_file_path = None
         self.current_page_index = 0
         self.page_text_items = {}
+        self.page_image_items = {}
 
         self.pdf_view.scene().clear()
         self.statusBar().showMessage("PDF closed")
@@ -527,9 +537,25 @@ class MainWindow(QMainWindow):
         if not ok:
             return
 
+        color = QColorDialog.getColor(
+            QColor(0, 0, 0),
+            self,
+            "Select Text Color"
+        )
+
+        if not color.isValid():
+            return
+
         self.push_undo_state()
 
-        text_item = PdfTextItem(text, font_size, self.zoom, self)
+        text_item = PdfTextItem(
+            text,
+            font_size,
+            self.zoom,
+            self,
+            color
+        )
+
         text_item.setPos(100, 100)
 
         self.pdf_view.scene().addItem(text_item)
@@ -544,7 +570,8 @@ class MainWindow(QMainWindow):
             return
 
         scene = self.pdf_view.scene()
-        items_for_page = []
+        text_items_for_page = []
+        image_items_for_page = []
 
         for item in scene.items():
             if isinstance(item, PdfTextItem):
@@ -556,7 +583,9 @@ class MainWindow(QMainWindow):
                 position = item.scenePos()
                 rect = item.boundingRect()
 
-                items_for_page.append(
+                text_color = item.text_color
+
+                text_items_for_page.append(
                     {
                         "text": text,
                         "x": position.x() / self.zoom,
@@ -564,20 +593,45 @@ class MainWindow(QMainWindow):
                         "width": rect.width() / self.zoom,
                         "height": rect.height() / self.zoom,
                         "font_size": item.pdf_font_size,
+                        "color": (
+                            text_color.red(),
+                            text_color.green(),
+                            text_color.blue(),
+                        ),
                     }
                 )
 
-        self.page_text_items[self.current_page_index] = items_for_page
+            elif isinstance(item, PdfImageItem):
+                position = item.scenePos()
+                pixmap = item.pixmap()
+
+                image_items_for_page.append(
+                    {
+                        "image_path": item.image_path,
+                        "x": position.x() / self.zoom,
+                        "y": position.y() / self.zoom,
+                        "width": (pixmap.width() * item.scale()) / self.zoom,
+                        "height": (pixmap.height() * item.scale()) / self.zoom,
+                        "scale": item.scale(),
+                    }
+                )
+
+        self.page_text_items[self.current_page_index] = text_items_for_page
+        self.page_image_items[self.current_page_index] = image_items_for_page
 
     def restore_text_items_for_current_page(self):
-        items_for_page = self.page_text_items.get(self.current_page_index, [])
+        text_items_for_page = self.page_text_items.get(self.current_page_index, [])
 
-        for item_data in items_for_page:
+        for item_data in text_items_for_page:
+            color_data = item_data.get("color", (0, 0, 0))
+            color = QColor(color_data[0], color_data[1], color_data[2])
+
             text_item = PdfTextItem(
                 item_data["text"],
                 item_data["font_size"],
                 self.zoom,
-                self
+                self,
+                color
             )
 
             text_item.setPos(
@@ -586,6 +640,24 @@ class MainWindow(QMainWindow):
             )
 
             self.pdf_view.scene().addItem(text_item)
+
+        image_items_for_page = self.page_image_items.get(self.current_page_index, [])
+
+        for item_data in image_items_for_page:
+            image_item = PdfImageItem(
+                item_data["image_path"],
+                self.zoom,
+                self
+            )
+
+            image_item.setPos(
+                item_data["x"] * self.zoom,
+                item_data["y"] * self.zoom
+            )
+
+            image_item.setScale(item_data.get("scale", 1.0))
+
+            self.pdf_view.scene().addItem(image_item)
 
     def apply_text_items_to_pdf(self):
         if not self.pdf_document:
@@ -617,14 +689,49 @@ class MainWindow(QMainWindow):
                     y + height
                 )
 
+                color_data = item_data.get("color", (0, 0, 0))
+
+                pdf_color = (
+                    color_data[0] / 255,
+                    color_data[1] / 255,
+                    color_data[2] / 255,
+                )
+
                 page.insert_textbox(
                     rect,
                     text,
                     fontsize=item_data["font_size"],
-                    color=(0, 0, 0)
+                    color=pdf_color
+                )
+
+        for page_index, image_items in self.page_image_items.items():
+            if page_index < 0 or page_index >= len(self.pdf_document):
+                continue
+
+            page = self.pdf_document[page_index]
+
+            for item_data in image_items:
+                image_path = item_data["image_path"]
+
+                x = item_data["x"]
+                y = item_data["y"]
+                width = max(item_data["width"], 1)
+                height = max(item_data["height"], 1)
+
+                rect = fitz.Rect(
+                    x,
+                    y,
+                    x + width,
+                    y + height
+                )
+
+                page.insert_image(
+                    rect,
+                    filename=image_path
                 )
 
         self.page_text_items = {}
+        self.page_image_items = {}
 
     # -------------------------
     # Pages tools
@@ -727,6 +834,7 @@ class MainWindow(QMainWindow):
         except Exception as error:
             QMessageBox.critical(self, "Rotate Error", f"Could not rotate pages:\n{error}")
 
+
     def delete_pages(self):
         if not self.pdf_document:
             QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
@@ -771,6 +879,7 @@ class MainWindow(QMainWindow):
                 self.pdf_document.delete_page(page_index)
 
             self.rebuild_text_items_after_delete(pages)
+            self.rebuild_image_items_after_delete(pages)
 
             if self.current_page_index >= len(self.pdf_document):
                 self.current_page_index = len(self.pdf_document) - 1
@@ -780,6 +889,7 @@ class MainWindow(QMainWindow):
 
         except Exception as error:
             QMessageBox.critical(self, "Delete Error", f"Could not delete pages:\n{error}")
+
 
     def rebuild_text_items_after_delete(self, deleted_pages):
         deleted_pages = set(deleted_pages)
@@ -794,6 +904,20 @@ class MainWindow(QMainWindow):
             new_page_text_items[new_index] = items
 
         self.page_text_items = new_page_text_items
+
+    def rebuild_image_items_after_delete(self, deleted_pages):
+        deleted_pages = set(deleted_pages)
+        new_page_image_items = {}
+
+        for old_index, items in self.page_image_items.items():
+            if old_index in deleted_pages:
+                continue
+
+            shift = sum(1 for deleted_index in deleted_pages if deleted_index < old_index)
+            new_index = old_index - shift
+            new_page_image_items[new_index] = items
+
+        self.page_image_items = new_page_image_items
 
     def extract_pages(self):
         if not self.pdf_document:
@@ -847,6 +971,7 @@ class MainWindow(QMainWindow):
 
         except Exception as error:
             QMessageBox.critical(self, "Extract Error", f"Could not extract pages:\n{error}")
+
 
     def reorder_pages(self):
         if not self.pdf_document:
@@ -913,6 +1038,15 @@ class MainWindow(QMainWindow):
                     reordered_text_items[new_index] = self.page_text_items[old_index]
 
             self.page_text_items = reordered_text_items
+
+            reordered_image_items = {}
+
+            for new_index, old_index in enumerate(new_order):
+                if old_index in self.page_image_items:
+                    reordered_image_items[new_index] = self.page_image_items[old_index]
+
+            self.page_image_items = reordered_image_items
+
 
             self.current_page_index = 0
             self.render_page()
@@ -1037,6 +1171,34 @@ class MainWindow(QMainWindow):
 
         except Exception as error:
             QMessageBox.critical(self, "Split Error", f"Could not split PDF:\n{error}")
+
+
+    def add_image_item(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        image_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select Image",
+            "",
+            "Image Files (*.png *.jpg *.jpeg)"
+        )
+
+        if not image_path:
+            return
+
+        self.push_undo_state()
+
+        image_item = PdfImageItem(image_path, self.zoom, self)
+        image_item.setPos(100, 100)
+
+        self.pdf_view.scene().addItem(image_item)
+        image_item.setSelected(True)
+
+        self.statusBar().showMessage(
+            "Image added. Drag it to move, use bottom-right handle to resize, press Delete to remove."
+        )
 
     # -------------------------
     # Help

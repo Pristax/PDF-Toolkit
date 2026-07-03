@@ -2,6 +2,7 @@ from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QGraphicsView, QGraphicsScene
 
 from app.pdf_text_item import PdfTextItem
+from app.pdf_image_item import PdfImageItem
 
 
 class PdfEditorView(QGraphicsView):
@@ -67,20 +68,20 @@ class PdfEditorView(QGraphicsView):
         if event.key() == Qt.Key_Delete:
             selected_items = self.scene().selectedItems()
 
-            text_items = [
+            editable_items = [
                 item for item in selected_items
-                if isinstance(item, PdfTextItem)
+                if isinstance(item, (PdfTextItem, PdfImageItem))
             ]
 
-            if text_items:
+            if editable_items:
                 if self.main_window:
                     self.main_window.push_undo_state()
 
-                for item in text_items:
+                for item in editable_items:
                     self.scene().removeItem(item)
 
                 if self.main_window:
-                    self.main_window.statusBar().showMessage("Selected text removed")
+                    self.main_window.statusBar().showMessage("Selected item removed")
 
                 return
 
