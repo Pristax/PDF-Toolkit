@@ -24,8 +24,6 @@ The goal of this project is to provide a fast, lightweight, and user-friendly al
 - Add images
 - Draw with a pen
 - Highlight text
-- Insert shapes
-- Add signatures
 
 ## OCR
 Convert scanned PDFs into searchable documents
@@ -41,6 +39,34 @@ Extract text from images
 - Remove metadata
 
 ## Changelog
+
+### v0.6
+
+Version 0.6 expands the drawing and annotation tools.
+
+#### Added
+
+- Added **Pen** tool
+- Added freehand drawing on PDF pages
+- Added custom pen color selection
+- Added custom pen width selection
+- Added **Highlight** tool
+- Added freehand highlighter drawing on PDF pages
+- Added custom highlight color selection
+- Added custom highlight width selection
+- Added highlight opacity support
+- Added saving of pen strokes into PDF files
+- Added saving of highlights into PDF files
+- Added `Ctrl+Z` undo support for pen and highlight actions
+- Added `Delete` support for removing selected pen strokes and highlights
+
+#### Improved
+
+- Fixed pen strokes being connected from the end point back to the start point after saving
+- Improved PDF drawing save behavior by preventing closed paths
+- Improved annotation object handling
+- Improved Edit PDF menu by removing the unused Signature tool
+- Highlight and Pen now use the same editable drawing object system
 
 ### v0.5
 

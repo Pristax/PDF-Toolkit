@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
 from app.pdf_editor_view import PdfEditorView
 from app.pdf_text_item import PdfTextItem
 from app.pdf_image_item import PdfImageItem
+from app.pdf_pen_item import PdfPenItem
 
 
 APP_NAME = "PDF Toolkit"
@@ -44,6 +45,15 @@ class MainWindow(QMainWindow):
         # They are stored here until Save / Save As writes them into the PDF.
         self.page_text_items = {}
         self.page_image_items = {}
+        self.page_pen_items = {}
+
+        self.current_tool = None
+        self.pen_color = QColor(0, 0, 0)
+        self.pen_width = 3
+
+        self.highlight_color = QColor(255, 255, 0)
+        self.highlight_width = 18
+        self.highlight_opacity = 0.35
 
         self.undo_stack = []
         self.max_undo_steps = 20
@@ -103,8 +113,10 @@ class MainWindow(QMainWindow):
         self.add_image_action.triggered.connect(self.add_image_item)
 
         self.pen_action = QAction("Pen", self)
+        self.pen_action.triggered.connect(self.activate_pen_tool)
+
         self.highlight_action = QAction("Highlight", self)
-        self.signature_action = QAction("Signature", self)
+        self.highlight_action.triggered.connect(self.activate_highlight_tool)
 
         # Undo
         self.undo_action = QAction("Undo", self)
@@ -172,7 +184,6 @@ class MainWindow(QMainWindow):
         edit_pdf_menu.addAction(self.add_image_action)
         edit_pdf_menu.addAction(self.highlight_action)
         edit_pdf_menu.addAction(self.pen_action)
-        edit_pdf_menu.addAction(self.signature_action)
 
         convert_menu = menubar.addMenu("Convert")
         convert_menu.addAction(self.pdf_to_images_action)
@@ -260,6 +271,7 @@ class MainWindow(QMainWindow):
                 "zoom": self.zoom,
                 "page_text_items": copy.deepcopy(self.page_text_items),
                 "page_image_items": copy.deepcopy(self.page_image_items),
+                "page_pen_items": copy.deepcopy(self.page_pen_items),
             }
 
             self.undo_stack.append(state)
@@ -300,6 +312,7 @@ class MainWindow(QMainWindow):
             self.zoom = state["zoom"]
             self.page_text_items = copy.deepcopy(state["page_text_items"])
             self.page_image_items = copy.deepcopy(state.get("page_image_items", {}))
+            self.page_pen_items = copy.deepcopy(state.get("page_pen_items", {}))
 
             if self.current_page_index >= len(self.pdf_document):
                 self.current_page_index = max(0, len(self.pdf_document) - 1)
@@ -343,6 +356,7 @@ class MainWindow(QMainWindow):
             self.current_page_index = 0
             self.page_text_items = {}
             self.page_image_items = {}
+            self.page_pen_items = {}
 
             self.render_page()
             self.statusBar().showMessage(f"Opened: {file_path}")
@@ -360,6 +374,7 @@ class MainWindow(QMainWindow):
         self.current_page_index = 0
         self.page_text_items = {}
         self.page_image_items = {}
+        self.page_pen_items = {}
 
         self.pdf_view.scene().clear()
         self.statusBar().showMessage("PDF closed")
@@ -572,6 +587,7 @@ class MainWindow(QMainWindow):
         scene = self.pdf_view.scene()
         text_items_for_page = []
         image_items_for_page = []
+        pen_items_for_page = []
 
         for item in scene.items():
             if isinstance(item, PdfTextItem):
@@ -616,11 +632,30 @@ class MainWindow(QMainWindow):
                     }
                 )
 
+            elif isinstance(item, PdfPenItem):
+                color = item.pen_color
+
+                pen_items_for_page.append(
+                    {
+                        "points": item.points,
+                        "color": (
+                            color.red(),
+                            color.green(),
+                            color.blue(),
+                        ),
+                        "width": item.pen_width,
+                        "opacity": item.opacity,
+                        "item_type": item.item_type,
+                    }
+                )
+
         self.page_text_items[self.current_page_index] = text_items_for_page
         self.page_image_items[self.current_page_index] = image_items_for_page
+        self.page_pen_items[self.current_page_index] = pen_items_for_page
 
     def restore_text_items_for_current_page(self):
         text_items_for_page = self.page_text_items.get(self.current_page_index, [])
+        pen_items_for_page = self.page_pen_items.get(self.current_page_index, [])
 
         for item_data in text_items_for_page:
             color_data = item_data.get("color", (0, 0, 0))
@@ -640,6 +675,22 @@ class MainWindow(QMainWindow):
             )
 
             self.pdf_view.scene().addItem(text_item)
+
+        for item_data in pen_items_for_page:
+            color_data = item_data.get("color", (0, 0, 0))
+            color = QColor(color_data[0], color_data[1], color_data[2])
+
+            pen_item = PdfPenItem(
+                points=item_data["points"],
+                color=color,
+                width=item_data["width"],
+                zoom=self.zoom,
+                main_window=self,
+                opacity=item_data.get("opacity", 1.0),
+                item_type=item_data.get("item_type", "pen"),
+            )
+
+            self.pdf_view.scene().addItem(pen_item)
 
         image_items_for_page = self.page_image_items.get(self.current_page_index, [])
 
@@ -730,8 +781,47 @@ class MainWindow(QMainWindow):
                     filename=image_path
                 )
 
-        self.page_text_items = {}
-        self.page_image_items = {}
+        for page_index, pen_items in self.page_pen_items.items():
+            if page_index < 0 or page_index >= len(self.pdf_document):
+                continue
+
+            page = self.pdf_document[page_index]
+
+            for item_data in pen_items:
+                points = item_data.get("points", [])
+
+                if len(points) < 2:
+                    continue
+
+                color_data = item_data.get("color", (0, 0, 0))
+
+                pdf_color = (
+                    color_data[0] / 255,
+                    color_data[1] / 255,
+                    color_data[2] / 255,
+                )
+
+                width = item_data.get("width", 3)
+                opacity = item_data.get("opacity", 1.0)
+
+                fitz_points = [
+                    fitz.Point(x, y)
+                    for x, y in points
+                ]
+
+                shape = page.new_shape()
+                shape.draw_polyline(fitz_points)
+                shape.finish(
+                    color=pdf_color,
+                    width=width,
+                    stroke_opacity=opacity,
+                    closePath=False,
+                )
+                shape.commit()
+
+                self.page_text_items = {}
+                self.page_image_items = {}
+                self.page_pen_items = {}
 
     # -------------------------
     # Pages tools
@@ -880,6 +970,7 @@ class MainWindow(QMainWindow):
 
             self.rebuild_text_items_after_delete(pages)
             self.rebuild_image_items_after_delete(pages)
+            self.rebuild_pen_items_after_delete(pages)
 
             if self.current_page_index >= len(self.pdf_document):
                 self.current_page_index = len(self.pdf_document) - 1
@@ -890,6 +981,20 @@ class MainWindow(QMainWindow):
         except Exception as error:
             QMessageBox.critical(self, "Delete Error", f"Could not delete pages:\n{error}")
 
+
+    def rebuild_pen_items_after_delete(self, deleted_pages):
+        deleted_pages = set(deleted_pages)
+        new_page_pen_items = {}
+
+        for old_index, items in self.page_pen_items.items():
+            if old_index in deleted_pages:
+                continue
+
+            shift = sum(1 for deleted_index in deleted_pages if deleted_index < old_index)
+            new_index = old_index - shift
+            new_page_pen_items[new_index] = items
+
+        self.page_pen_items = new_page_pen_items
 
     def rebuild_text_items_after_delete(self, deleted_pages):
         deleted_pages = set(deleted_pages)
@@ -1047,6 +1152,13 @@ class MainWindow(QMainWindow):
 
             self.page_image_items = reordered_image_items
 
+            reordered_pen_items = {}
+
+            for new_index, old_index in enumerate(new_order):
+                if old_index in self.page_pen_items:
+                    reordered_pen_items[new_index] = self.page_pen_items[old_index]
+
+            self.page_pen_items = reordered_pen_items
 
             self.current_page_index = 0
             self.render_page()
@@ -1198,6 +1310,75 @@ class MainWindow(QMainWindow):
 
         self.statusBar().showMessage(
             "Image added. Drag it to move, use bottom-right handle to resize, press Delete to remove."
+        )
+
+    def activate_pen_tool(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        color = QColorDialog.getColor(
+            self.pen_color,
+            self,
+            "Select Pen Color"
+        )
+
+        if not color.isValid():
+            return
+
+        width, ok = QInputDialog.getInt(
+            self,
+            "Pen Width",
+            "Enter pen width:",
+            self.pen_width,
+            1,
+            30
+        )
+
+        if not ok:
+            return
+
+        self.pen_color = color
+        self.pen_width = width
+        self.current_tool = "pen"
+
+        self.statusBar().showMessage(
+            "Pen tool active. Hold left mouse button and draw. Press Esc to disable pen tool."
+        )
+
+    def activate_highlight_tool(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        color = QColorDialog.getColor(
+            self.highlight_color,
+            self,
+            "Select Highlight Color"
+        )
+
+        if not color.isValid():
+            return
+
+        width, ok = QInputDialog.getInt(
+            self,
+            "Highlight Width",
+            "Enter highlight width:",
+            self.highlight_width,
+            4,
+            80
+        )
+
+        if not ok:
+            return
+
+        self.highlight_color = color
+        self.highlight_width = width
+        self.highlight_opacity = 0.35
+        self.current_tool = "highlight"
+
+        self.statusBar().showMessage(
+            "Highlight tool active. Hold left mouse button and drag over text. Press Esc to disable."
         )
 
     # -------------------------
