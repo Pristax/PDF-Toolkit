@@ -126,7 +126,11 @@ class MainWindow(QMainWindow):
 
         # Convert actions
         self.pdf_to_images_action = QAction("PDF to Images", self)
+        self.pdf_to_images_action.triggered.connect(self.export_pdf_to_images)
+
         self.images_to_pdf_action = QAction("Images to PDF", self)
+        self.images_to_pdf_action.triggered.connect(self.convert_images_to_pdf)
+
         self.ocr_action = QAction("OCR", self)
         self.searchable_pdf_action = QAction("Make Searchable PDF", self)
 
@@ -1381,8 +1385,140 @@ class MainWindow(QMainWindow):
             "Highlight tool active. Hold left mouse button and drag over text. Press Esc to disable."
         )
 
+    def export_pdf_to_images(self):
+        if not self.pdf_document:
+            QMessageBox.warning(self, "No PDF", "No PDF is currently open.")
+            return
+
+        output_folder = QFileDialog.getExistingDirectory(
+            self,
+            "Select Output Folder"
+        )
+
+        if not output_folder:
+            return
+
+        image_format, ok = QInputDialog.getItem(
+            self,
+            "Image Format",
+            "Select output image format:",
+            ["png", "jpg"],
+            0,
+            False
+        )
+
+        if not ok:
+            return
+
+        zoom, ok = QInputDialog.getDouble(
+            self,
+            "Export Quality",
+            "Enter export scale:",
+            2.0,
+            0.5,
+            5.0,
+            1
+        )
+
+        if not ok:
+            return
+
+        try:
+            page_count = len(self.pdf_document)
+
+            for page_index in range(page_count):
+                page = self.pdf_document[page_index]
+
+                matrix = fitz.Matrix(zoom, zoom)
+                pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+
+                output_path = os.path.join(
+                    output_folder,
+                    f"page_{page_index + 1}.{image_format}"
+                )
+
+                pixmap.save(output_path)
+
+            self.statusBar().showMessage(
+                f"Exported {page_count} page(s) as images"
+            )
+
+            QMessageBox.information(
+                self,
+                "Export Complete",
+                f"Exported {page_count} page(s) to:\n{output_folder}"
+            )
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Export Error",
+                f"Could not export PDF to images:\n{error}"
+            )
+
+    def convert_images_to_pdf(self):
+        image_paths, _ = QFileDialog.getOpenFileNames(
+            self,
+            "Select Images",
+            "",
+            "Image Files (*.png *.jpg *.jpeg)"
+        )
+
+        if not image_paths:
+            return
+
+        output_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save PDF As",
+            "",
+            "PDF Files (*.pdf)"
+        )
+
+        if not output_path:
+            return
+
+        if not output_path.lower().endswith(".pdf"):
+            output_path += ".pdf"
+
+        try:
+            output_document = fitz.open()
+
+            for image_path in image_paths:
+                image_document = fitz.open(image_path)
+                pdf_bytes = image_document.convert_to_pdf()
+                image_document.close()
+
+                image_pdf = fitz.open("pdf", pdf_bytes)
+                output_document.insert_pdf(image_pdf)
+                image_pdf.close()
+
+            output_document.save(output_path)
+            output_document.close()
+
+            self.statusBar().showMessage(
+                f"Converted {len(image_paths)} image(s) to PDF"
+            )
+
+            reply = QMessageBox.question(
+                self,
+                "Open Created PDF",
+                "PDF was created. Do you want to open it now?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes
+            )
+
+            if reply == QMessageBox.Yes:
+                self.load_pdf(output_path)
+
+        except Exception as error:
+            QMessageBox.critical(
+                self,
+                "Convert Error",
+                f"Could not convert images to PDF:\n{error}"
+            )
+
     # -------------------------
-    # Help
+    # About
     # -------------------------
 
     def show_about_dialog(self):

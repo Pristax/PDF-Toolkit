@@ -40,6 +40,29 @@ Extract text from images
 
 ## Changelog
 
+### v0.7
+
+Version 0.7 adds the first Convert tools.
+
+#### Added
+
+- Added **PDF to Images** tool
+- Added export of PDF pages as image files
+- Added support for exporting pages as `.png`
+- Added support for exporting pages as `.jpg`
+- Added export scale / quality selection
+- Added **Images to PDF** tool
+- Added support for converting `.png`, `.jpg` and `.jpeg` images into a PDF
+- Added multi-image selection for creating one PDF from multiple images
+- Added option to open the newly created PDF after conversion
+
+#### Improved
+
+- Improved Convert menu functionality
+- Added user feedback after export / conversion completion
+- Added status bar messages during conversion
+- Improved workflow for basic PDF and image conversion
+
 ### v0.6
 
 Version 0.6 expands the drawing and annotation tools.
